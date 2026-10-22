@@ -4,7 +4,7 @@ version = "0.2.1"
 description = "A manga stray cat in a window whose health mirrors your homelab."
 readme = "README.md"
 requires-python = ">=3.11"
-license = "GPL-3.0-or-later"
+license = "MIT"
 authors = [{ name = "FreedzHost" }]
 keywords = ["monitoring", "desktop", "pet", "homelab", "pywebview", "pyqt"]
 dependencies = ["pywebview>=5"]

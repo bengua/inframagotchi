@@ -2,7 +2,7 @@
 
 Un tamagotchi pour votre homelab : un petit chat manga qui vit dans une fenêtre et dépérit à mesure que votre infrastructure se dégrade.
 
-[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/OWNERTEST/inframagotchi/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNERTEST/inframagotchi/actions/workflows/ci.yml)
 
 ![Les quatre états de santé de l'avatar hamster, de 100 % à 0 %](docs/avatars/previews/hamster.png)
@@ -157,7 +157,7 @@ reste chez vous.
 
 ## Licence
 
-[GPL-3.0](LICENSE).
+[MIT](LICENSE).
 
 ## English
 
@@ -187,7 +187,7 @@ Probes live in `inframagotchi.json` (or `$INFRAMAGOTCHI_CONFIG`).
 screen does not. Monitoring turned into a companion, fully local, no cloud, no
 account.
 
-**License**: [GPL-3.0](LICENSE).
+**License**: [MIT](LICENSE).
 
 ---
 
