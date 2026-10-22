@@ -34,7 +34,7 @@ Everything runs on one machine. This is the simplest setup and the default mode.
 ### Install
 
 ```sh
-git clone https://github.com/OWNERTEST/inframagotchi
+git clone https://github.com/bengua/inframagotchi
 cd inframagotchi
 uv venv --system-site-packages
 uv sync
@@ -67,7 +67,7 @@ This is the common homelab split: one engine running on a small server or VM, an
 ### Server install (headless)
 
 ```sh
-git clone https://github.com/OWNERTEST/inframagotchi
+git clone https://github.com/bengua/inframagotchi
 cd inframagotchi
 uv venv --system-site-packages
 uv sync
@@ -101,7 +101,7 @@ systemctl --user enable --now inframagotchi
 The client machine needs only the project files and the same GTK/WebKit system packages; no probes run locally.
 
 ```sh
-git clone https://github.com/OWNERTEST/inframagotchi
+git clone https://github.com/bengua/inframagotchi
 cd inframagotchi
 uv venv --system-site-packages
 uv sync

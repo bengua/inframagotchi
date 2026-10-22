@@ -3,7 +3,9 @@
 Un tamagotchi pour votre homelab : un petit chat manga qui vit dans une fenêtre et dépérit à mesure que votre infrastructure se dégrade.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/OWNERTEST/inframagotchi/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNERTEST/inframagotchi/actions/workflows/ci.yml)
+[![CI](https://github.com/bengua/inframagotchi/actions/workflows/ci.yml/badge.svg)](https://github.com/bengua/inframagotchi/actions/workflows/ci.yml)
+
+**Tutoriel** : [installation pas à pas sur freedzhost.cloud](https://freedzhost.cloud/fr/inframagotchi.html) · [step-by-step tutorial on freedzhost.cloud (EN)](https://freedzhost.cloud/en/inframagotchi.html)
 
 ![Les quatre états de santé de l'avatar hamster, de 100 % à 0 %](docs/avatars/previews/hamster.png)
 
@@ -52,7 +54,7 @@ sudo pacman -S --needed webkit2gtk-4.1 python-gobject python-cairo
 ### Installation
 
 ```sh
-git clone https://github.com/OWNERTEST/inframagotchi
+git clone https://github.com/bengua/inframagotchi
 cd inframagotchi
 
 # variante GTK/WebKit : le virtualenv doit voir les bindings du système
@@ -169,7 +171,7 @@ local HTTP engine pushes it to the window.
 **Install**
 
 ```sh
-git clone https://github.com/OWNERTEST/inframagotchi
+git clone https://github.com/bengua/inframagotchi
 cd inframagotchi
 uv venv --system-site-packages && uv sync   # system GTK/WebKit
 # or: uv sync --extra qt                    # Qt backend

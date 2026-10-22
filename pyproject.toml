@@ -13,7 +13,7 @@ dependencies = ["pywebview>=5"]
 qt = ["pywebview[qt]>=5"]
 
 [project.urls]
-Homepage = "https://github.com/OWNERTEST/inframagotchi"
+Homepage = "https://github.com/bengua/inframagotchi"
 
 [project.scripts]
 inframagotchi = "app:main"
