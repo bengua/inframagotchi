@@ -1,0 +1,11 @@
+[Unit]
+Description=inframagotchi — infra tamagotchi
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/inframagotchi --serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

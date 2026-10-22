@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>infra-cat</title>
+<style>
+  :root{
+    --bg:#0a0a0e; --bg2:#13131b; --ink:#e7e9f0; --muted:#6f7484;
+    --neon:#4aff96; --alarm:#ff4860; --metal:#c4cad4;
+    --mono: ui-monospace,"JetBrains Mono","Cascadia Code",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:radial-gradient(120% 120% at 50% 28%,var(--bg2),var(--bg) 70%);
+    color:var(--ink);font-family:var(--mono);display:flex;align-items:center;justify-content:center;overflow:hidden}
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(130% 130% at 50% 45%,transparent 55%,rgba(0,0,0,.55));mix-blend-mode:multiply}
+  main{display:flex;flex-direction:column;align-items:center;gap:14px;padding:22px}
+  .eyebrow{font-size:12px;letter-spacing:.32em;text-transform:uppercase;color:var(--muted);
+    display:flex;gap:10px;align-items:center}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--neon);box-shadow:0 0 10px var(--neon);transition:.45s}
+  @media (max-width: 400px){
+    html,body{background:transparent !important}
+    main{padding:0 !important;gap:0 !important;max-width:none !important;height:100vh !important;justify-content:center !important}
+    .rig,.quip,.menu-btn,header,.dot,.rowlab{display:none !important}
+    canvas{width:auto !important;height:96vh !important;max-width:96vw !important;filter:none !important}
+  }
+  canvas{display:block;filter:drop-shadow(0 18px 30px rgba(0,0,0,.5))}
+  .quip{min-height:1.4em;color:var(--muted);font-size:14px;text-align:center;max-width:32ch}
+  .rig{display:flex;flex-direction:column;align-items:center;gap:8px;width:320px}
+  .rowlab{display:flex;justify-content:space-between;width:100%;font-size:11px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .rowlab b{color:var(--ink);font-weight:600}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;
+    background:linear-gradient(90deg,var(--alarm),#ffb13b 50%,var(--neon));outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+    background:var(--ink);border:2px solid #0a0a0e;box-shadow:0 0 12px rgba(255,255,255,.35);cursor:grab}
+  input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--ink);
+    border:2px solid #0a0a0e;cursor:grab}
+  input[type=range]:focus-visible{box-shadow:0 0 0 2px var(--neon)}
+  .legend{font-size:11px;color:#494d5a;letter-spacing:.04em}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow"><span class="dot" id="dot"></span><span id="status">infra-cat</span></div>
+  <canvas id="cat" width="420" height="470" aria-label="A manga stray cat that degrades as infrastructure health drops"></canvas>
+  <p class="quip" id="quip"></p>
+  <div class="rig">
+    <div class="rowlab"><span>infra health</span><b id="pct">100%</b></div>
+    <input type="range" id="hp" min="0" max="100" value="100" aria-label="Simulated infrastructure health" />
+    <div class="rowlab"><span>cpu load</span><b id="ldv">60%</b></div>
+    <input type="range" id="ld" min="0" max="100" value="60" aria-label="Simulated CPU load" />
+  </div>
+  <div class="legend">// drag it down — probes will drive this later</div>
+</main>
+<script>
+"use strict";
+const cv=document.getElementById("cat"), ctx=cv.getContext("2d");
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const C={fur:"#30333c",furDk:"#1a1c23",furHi:"#4a4e5c",ink:"#07080c",eyew:"#eef2fa",
+  neon:[74,255,150],red:[255,72,96],nose:"#d6788e",sweat:"#82cdff",vein:"#ff4a60",
+  band:"#e4d0ac",metal:"#c4cad4",earin:"#6e2d40",white:"#f6f9ff"};
+const lerp=(a,b,k)=>a+(b-a)*k, clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const mix=(c1,c2,k)=>[lerp(c1[0],c2[0],k),lerp(c1[1],c2[1],k),lerp(c1[2],c2[2],k)];
+const rgb=a=>`rgb(${a[0]|0},${a[1]|0},${a[2]|0})`;
+
+function quipFor(h){
+  if(h>0.8)  return ["purring. don't push it.","ok"];
+  if(h>0.55) return ["...still up. whatever.","ok"];
+  if(h>0.35) return ["something's off. you smell that?","warn"];
+  if(h>0.18) return ["i don't feel so good.","warn"];
+  return ["x_x  (restart me)","crit"];
+}
+
+let target=1, health=1, loadT=0.6, load=0.6;
+let blink=0, nextBlink=1500, start=performance.now();
+
+function star(x,y,r,col,a){
+  ctx.save(); ctx.globalAlpha=a==null?1:a; ctx.fillStyle=col; ctx.beginPath();
+  for(let i=0;i<8;i++){const rr=i%2?r*0.42:r;const ang=-Math.PI/2+i*Math.PI/4;
+    ctx[i?"lineTo":"moveTo"](x+Math.cos(ang)*rr,y+Math.sin(ang)*rr);}
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+
+function eye(ex,ey,ew,eh,h,t){
+  const droop=1-h, eyecol=mix(C.red,C.neon,clamp(h,0,1));
+  const lid=Math.max(blink, droop*0.5);
+  if(h<0.15){
+    ctx.strokeStyle=C.ink; ctx.lineWidth=5; ctx.lineCap="round";
+    ctx.beginPath();
+    ctx.moveTo(ex-ew*0.6,ey-eh*0.6); ctx.lineTo(ex+ew*0.6,ey+eh*0.6);
+    ctx.moveTo(ex-ew*0.6,ey+eh*0.6); ctx.lineTo(ex+ew*0.6,ey-eh*0.6); ctx.stroke();
+    return;
+  }
+  ctx.fillStyle=C.eyew; ctx.strokeStyle=C.ink; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.ellipse(ex,ey,ew,eh,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  const irr=ew*lerp(0.95,0.62,droop);
+  ctx.save();
+  ctx.shadowColor=rgb(eyecol); ctx.shadowBlur=18*lerp(0.5,1.4,h);
+  const g=ctx.createRadialGradient(ex-irr*0.3,ey-eh*0.3,1,ex,ey,irr*1.1);
+  g.addColorStop(0,"#ffffff"); g.addColorStop(.4,rgb(eyecol)); g.addColorStop(1,rgb(mix(eyecol,[0,0,0],0.45)));
+  ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(ex,ey,irr,eh*0.9,0,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle=C.ink; ctx.beginPath(); ctx.ellipse(ex,ey,irr*0.3,eh*0.34,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=C.white;
+  ctx.beginPath(); ctx.ellipse(ex-irr*0.4,ey-eh*0.4,irr*0.3,eh*0.26,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(ex+irr*0.32,ey+eh*0.34,irr*0.16,eh*0.14,0,0,Math.PI*2); ctx.fill();
+  if(h>0.82){ const tw=0.6+0.4*Math.sin(t*4); star(ex+irr*0.55,ey-eh*0.55,ew*0.28,C.white,tw); }
+  if(lid>0.04){
+    ctx.fillStyle=C.fur;
+    ctx.beginPath(); ctx.ellipse(ex,ey-eh+lid*eh*2,ew*1.05,eh,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=C.ink; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.ellipse(ex,ey,ew,eh,0,Math.PI,Math.PI*2); ctx.stroke();
+  }
+  if(h<0.5){ ctx.strokeStyle="rgba(150,130,150,.6)"; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(ex,ey+eh*0.2,ew*0.8,0.5,Math.PI-0.5); ctx.stroke(); }
+}
+
+function drawCat(t){
+  const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
+  const h=health, droop=1-h;
+  const act=clamp(load*clamp((h-0.05)/0.25,0,1),0,1);
+  const breath=reduce?0:Math.sin(t*1.9)*0.012;
+  const shake=(!reduce&&droop>0.55)?(Math.random()-.5)*(droop-0.5)*10:0;
+  const cx=W/2, head=H*0.40, s=W*0.205;
+
+  let sg=ctx.createRadialGradient(cx,H*0.93,4,cx,H*0.93,s*1.7);
+  sg.addColorStop(0,"rgba(0,0,0,.45)"); sg.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=sg; ctx.beginPath(); ctx.ellipse(cx,H*0.93,s*1.7,s*0.38,0,0,Math.PI*2); ctx.fill();
+
+  ctx.save();
+  ctx.translate(cx+shake, head+s*0.5);
+  if(!reduce) ctx.rotate(droop*-0.26 + Math.sin(t*1.1)*0.015);
+  ctx.translate(-cx, -(head+s*0.5));
+
+  const bodyY=head+s*1.9;
+  ctx.lineCap="round"; ctx.lineWidth=s*0.4; ctx.strokeStyle=C.fur;
+  ctx.beginPath(); ctx.moveTo(cx+s*0.85,bodyY+s*0.7);
+  ctx.bezierCurveTo(cx+s*1.7,bodyY+s*0.3,cx+s*1.7,head+s*0.9,
+    cx+s*1.4+Math.sin(t*(1.0+act*5))*s*(0.12+act*0.5), head+s*0.5); ctx.stroke();
+
+  ctx.fillStyle=C.fur; ctx.strokeStyle=C.ink; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.ellipse(cx,bodyY,s*1.18*(1-breath*0.5),s*1.32*(1+breath),0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=C.furHi; ctx.beginPath(); ctx.ellipse(cx,bodyY+s*0.45,s*0.55,s*0.85,0,0,Math.PI*2); ctx.fill();
+  for(const px of[-.5,.5]){ ctx.fillStyle=C.fur;
+    ctx.beginPath(); ctx.ellipse(cx+px*s*0.66,bodyY+s*1.05,s*0.3,s*0.26,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=C.ink; ctx.lineWidth=3; ctx.stroke(); }
+
+  const dE=droop*s*0.3;
+  function ear(dir,torn){ ctx.fillStyle=C.fur; ctx.strokeStyle=C.ink; ctx.lineWidth=4;
+    ctx.beginPath();
+    ctx.moveTo(cx+dir*s*0.82,head-s*0.4+dE);
+    ctx.lineTo(cx+dir*s*1.02,head-s*1.25+dE*1.6);
+    if(torn){ ctx.lineTo(cx+dir*s*0.72,head-s*0.95+dE*1.4); ctx.lineTo(cx+dir*s*0.6,head-s*0.78+dE); }
+    ctx.lineTo(cx+dir*s*0.25,head-s*0.8+dE*0.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=C.earin; ctx.beginPath();
+    ctx.moveTo(cx+dir*s*0.74,head-s*0.5+dE); ctx.lineTo(cx+dir*s*0.86,head-s*1.0+dE*1.5);
+    ctx.lineTo(cx+dir*s*0.4,head-s*0.78+dE*0.5); ctx.closePath(); ctx.fill(); }
+  ear(-1,false); ear(1,true);
+  ctx.strokeStyle=C.metal; ctx.lineWidth=2.6;
+  ctx.beginPath(); ctx.ellipse(cx-s*0.86,head-s*0.34+dE,s*0.09,s*0.11,0,0,Math.PI*2); ctx.stroke();
+
+  ctx.fillStyle=C.fur; ctx.strokeStyle=C.ink; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.ellipse(cx,head,s*1.14,s*1.0,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=C.furHi; ctx.beginPath(); ctx.ellipse(cx,head+s*0.45,s*0.92,s*0.5,0,0,Math.PI*2); ctx.fill();
+
+  const eyeY=head-s*0.05, edx=s*0.5, ew=s*0.44, eh=s*0.54;
+  eye(cx-edx,eyeY,ew,eh,h,t);
+  eye(cx+edx,eyeY,ew,eh,h,t);
+
+  ctx.fillStyle=C.nose; ctx.strokeStyle=C.ink; ctx.lineWidth=2.5;
+  ctx.beginPath(); ctx.moveTo(cx-s*0.12,head+s*0.42); ctx.lineTo(cx+s*0.12,head+s*0.42);
+  ctx.lineTo(cx,head+s*0.58); ctx.closePath(); ctx.fill(); ctx.stroke();
+
+  const my=head+s*0.6; ctx.strokeStyle=C.ink; ctx.lineWidth=3; ctx.lineCap="round";
+  if(h>0.7){ ctx.beginPath(); ctx.arc(cx-s*0.1,my+s*0.02,s*0.12,0,Math.PI*0.85);
+    ctx.arc(cx+s*0.1,my+s*0.02,s*0.12,Math.PI*0.15,Math.PI); ctx.stroke(); }
+  else if(h>0.35){ ctx.beginPath(); ctx.moveTo(cx-s*0.16,my+s*0.08); ctx.lineTo(cx+s*0.16,my+s*0.08); ctx.stroke(); }
+  else { ctx.fillStyle="#140d12"; ctx.beginPath(); ctx.ellipse(cx,my+s*0.16,s*0.2,s*0.22,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=C.ink; ctx.stroke();
+    ctx.fillStyle="#dc6480"; ctx.beginPath(); ctx.ellipse(cx+s*0.02,my+s*0.28,s*0.11,s*0.14,0,0,Math.PI*2); ctx.fill(); }
+
+  ctx.strokeStyle="rgba(231,233,240,.4)"; ctx.lineWidth=1.5;
+  const tw=reduce?0:Math.sin(t*3)*s*0.02;
+  for(const d of[-1,1]) for(const k of[-1,0,1]){ ctx.beginPath();
+    ctx.moveTo(cx+d*s*0.2,my-s*0.04+k*s*0.05);
+    ctx.quadraticCurveTo(cx+d*s*0.75,my+k*s*0.12+tw,cx+d*s*1.05,my+k*s*0.2); ctx.stroke(); }
+
+  ctx.strokeStyle="#101118"; ctx.lineWidth=s*0.15;
+  ctx.beginPath(); ctx.arc(cx,head+s*0.25,s*0.95,Math.PI*0.3,Math.PI*0.7); ctx.stroke();
+  for(let i=0;i<5;i++){ const a=Math.PI*0.34+(i/4)*Math.PI*0.32;
+    const xp=cx+Math.cos(a)*s*0.95, yp=head+s*0.25+Math.sin(a)*s*0.95;
+    ctx.fillStyle=C.metal; ctx.beginPath(); ctx.arc(xp,yp,s*0.05,0,Math.PI*2); ctx.fill(); }
+
+  // emotes
+  if(h>0.85 && !reduce){ const a=0.5+0.5*Math.sin(t*3+1); star(cx+s*1.0,head-s*0.7,s*0.16,C.white,a*0.8); }
+  if(h>0.3 && h<0.72){ const ph=(t*0.7)%1; const sx=cx+s*0.95, sy=head-s*0.7+ph*s*0.5;
+    ctx.fillStyle=C.sweat; ctx.globalAlpha=1-ph*0.3;
+    ctx.beginPath(); ctx.moveTo(sx,sy-s*0.14); ctx.quadraticCurveTo(sx+s*0.12,sy+s*0.06,sx,sy+s*0.12);
+    ctx.quadraticCurveTo(sx-s*0.12,sy+s*0.06,sx,sy-s*0.14); ctx.fill(); ctx.globalAlpha=1; }
+  if(h<0.5){ const vx=cx-s*0.95, vy=head-s*0.62, p=1+0.15*Math.sin(t*6);
+    ctx.strokeStyle=C.vein; ctx.lineWidth=4; ctx.lineCap="round";
+    for(let a=0;a<3;a++){ const ang=a*2*Math.PI/3;
+      ctx.beginPath();
+      ctx.moveTo(vx+Math.cos(ang)*s*0.2*p, vy+Math.sin(ang)*s*0.2*p);
+      ctx.lineTo(vx+Math.cos(ang)*s*0.06, vy+Math.sin(ang)*s*0.06);
+      ctx.lineTo(vx+Math.cos(ang+0.5)*s*0.16*p, vy+Math.sin(ang+0.5)*s*0.16*p); ctx.stroke(); } }
+  if(h<0.4){ ctx.save(); ctx.translate(cx-s*0.45,head+s*0.3); ctx.rotate(-0.3);
+    ctx.fillStyle=C.band; ctx.strokeStyle="rgba(180,160,130,.9)"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.roundRect(-s*0.28,-s*0.1,s*0.56,s*0.2,s*0.05); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle="rgba(180,160,130,1)";
+    ctx.beginPath(); ctx.moveTo(-s*0.07,-s*0.07); ctx.lineTo(s*0.07,s*0.07);
+    ctx.moveTo(-s*0.07,s*0.07); ctx.lineTo(s*0.07,-s*0.07); ctx.stroke(); ctx.restore(); }
+  if(h<0.15 && !reduce){ ctx.strokeStyle="rgba(225,225,130,.9)"; ctx.lineWidth=2.5;
+    for(const sx of[cx-s*0.45,cx+s*0.45]){ ctx.beginPath();
+      for(let i=0;i<26;i++){ const a=t*3+i*0.4, rr=i*0.5;
+        const X=sx+Math.cos(a)*rr, Y=head-s*1.35+Math.sin(a)*rr*0.6;
+        ctx[i?"lineTo":"moveTo"](X,Y);} ctx.stroke(); } }
+
+  ctx.restore();
+}
+
+function frame(now){
+  const t=(now-start)/1000;
+  if(now-start>nextBlink){ blink=1; nextBlink=(now-start)+1200+Math.random()*3200; }
+  blink=Math.max(0,blink-0.12);
+  health=lerp(health,target,reduce?1:0.1);
+  load=lerp(load,loadT,reduce?1:0.08);
+  drawCat(t);
+  requestAnimationFrame(frame);
+}
+
+const dot=document.getElementById("dot"), quipEl=document.getElementById("quip"),
+      pct=document.getElementById("pct"), hp=document.getElementById("hp"),
+      ld=document.getElementById("ld"), ldv=document.getElementById("ldv");
+function refreshHud(){
+  const [q,sev]=quipFor(target);
+  quipEl.innerHTML=q;
+  pct.textContent=Math.round(target*100)+"%";
+  ldv.textContent=Math.round(loadT*100)+"%";
+  const col = sev==="crit"?"var(--alarm)":sev==="warn"?"#ffb13b":"var(--neon)";
+  dot.style.background=col; dot.style.boxShadow="0 0 10px "+col;
+}
+hp.addEventListener("input",()=>{ target=hp.value/100; refreshHud(); });
+ld.addEventListener("input",()=>{ loadT=ld.value/100; refreshHud(); });
+
+// hi-dpi: render at device resolution, display at fixed CSS size (crisp on retina)
+const dpr=Math.min(devicePixelRatio||1,2);
+cv.width=420*dpr; cv.height=470*dpr; cv.style.width="420px"; cv.style.height="470px";
+refreshHud();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

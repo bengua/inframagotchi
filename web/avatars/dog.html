@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>inframagotchi — dog</title>
+<style>
+  :root{--bg:#0a0a0e;--bg2:#13131b;--ink:#e7e9f0;--muted:#6f7484;--neon:#4aff96;--alarm:#ff4860;
+    --mono:ui-monospace,"JetBrains Mono","Cascadia Code",Menlo,Consolas,monospace;}
+  *{box-sizing:border-box}html,body{height:100%}
+  body{margin:0;background:radial-gradient(120% 120% at 50% 28%,var(--bg2),var(--bg) 70%);
+    color:var(--ink);font-family:var(--mono);display:flex;align-items:center;justify-content:center;overflow:hidden}
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(130% 130% at 50% 45%,transparent 55%,rgba(0,0,0,.55));mix-blend-mode:multiply}
+  main{display:flex;flex-direction:column;align-items:center;gap:14px;padding:22px}
+  .eyebrow{font-size:12px;letter-spacing:.32em;text-transform:uppercase;color:var(--muted);display:flex;gap:10px;align-items:center}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--neon);box-shadow:0 0 10px var(--neon);transition:.45s}
+  @media (max-width: 400px){
+    html,body{background:transparent !important}
+    main{padding:0 !important;gap:0 !important;max-width:none !important;height:100vh !important;justify-content:center !important}
+    .rig,.quip,.menu-btn,header,.dot,.rowlab{display:none !important}
+    canvas{width:auto !important;height:96vh !important;max-width:96vw !important;filter:none !important}
+  }
+  canvas{display:block;filter:drop-shadow(0 18px 30px rgba(0,0,0,.5))}
+  .quip{min-height:1.4em;color:var(--muted);font-size:14px;text-align:center;max-width:32ch}
+  .rig{display:flex;flex-direction:column;align-items:center;gap:8px;width:300px}
+  .rowlab{display:flex;justify-content:space-between;width:100%;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .rowlab b{color:var(--ink);font-weight:600}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;
+    background:linear-gradient(90deg,var(--alarm),#ffb13b 50%,var(--neon));outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:17px;height:17px;border-radius:50%;
+    background:var(--ink);border:2px solid #0a0a0e;box-shadow:0 0 12px rgba(255,255,255,.35);cursor:grab}
+  input[type=range]::-moz-range-thumb{width:17px;height:17px;border-radius:50%;background:var(--ink);border:2px solid #0a0a0e;cursor:grab}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow"><span class="dot" id="dot"></span><span id="status">inframagotchi // dog</span></div>
+  <canvas id="c" width="420" height="470"></canvas>
+  <p class="quip" id="quip"></p>
+  <div class="rig">
+    <div class="rowlab"><span>infra health</span><b id="pct">100%</b></div>
+    <input type="range" id="hp" min="0" max="100" value="100"/>
+    <div class="rowlab"><span>cpu load</span><b id="ldv">60%</b></div>
+    <input type="range" id="ld" min="0" max="100" value="60"/>
+  </div>
+</main>
+<script>
+"use strict";
+const cv=document.getElementById("c"), X=cv.getContext("2d");
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const L=(a,b,k)=>a+(b-a)*k, CL=(v,a,b)=>Math.max(a,Math.min(b,v));
+const MIX=(c1,c2,k)=>[L(c1[0],c2[0],k),L(c1[1],c2[1],k),L(c1[2],c2[2],k)];
+const RGB=a=>`rgb(${a[0]|0},${a[1]|0},${a[2]|0})`;
+const C={fur:"#caa268",furDk:"#966e42",furHi:"#e4c28c",muzzle:"#f0e2ca",ear:"#785434",
+  nose:"#261e1c",tongue:"#e87084",tongueDk:"#c85068",ink:"#1c140e",eyew:"#faf8f2",
+  amber:[255,190,90],red:[255,72,96],collar:"#14151a",stud:"#b8beca",white:"#ffffff"};
+let health=1,target=1,load=0.6,loadT=0.6,blink=0,nextBlink=1500,t0=performance.now();
+
+function star(x,y,r,col,a){X.save();X.globalAlpha=a==null?1:a;X.fillStyle=col;X.beginPath();
+  for(let i=0;i<8;i++){const rr=i%2?r*0.42:r,an=-Math.PI/2+i*Math.PI/4;X[i?"lineTo":"moveTo"](x+Math.cos(an)*rr,y+Math.sin(an)*rr);}
+  X.closePath();X.fill();X.restore();}
+
+function eye(ex,ey,ew,eh,h,t){
+  const droop=1-h, col=MIX(C.red,C.amber,CL(h,0,1)), lid=Math.max(blink,droop*0.55);
+  if(h<0.15){X.strokeStyle=C.ink;X.lineWidth=5;X.lineCap="round";X.beginPath();
+    X.moveTo(ex-ew*0.6,ey-eh*0.6);X.lineTo(ex+ew*0.6,ey+eh*0.6);X.moveTo(ex-ew*0.6,ey+eh*0.6);X.lineTo(ex+ew*0.6,ey-eh*0.6);X.stroke();return;}
+  X.fillStyle=C.eyew;X.strokeStyle=C.ink;X.lineWidth=3;X.beginPath();X.ellipse(ex,ey,ew,eh,0,0,7);X.fill();X.stroke();
+  const ir=ew*L(0.95,0.62,droop);
+  X.save();X.shadowColor=RGB(col);X.shadowBlur=12*L(0.4,1.2,h);
+  const g=X.createRadialGradient(ex-ir*0.3,ey-eh*0.3,1,ex,ey,ir*1.1);
+  g.addColorStop(0,"#fff");g.addColorStop(.4,RGB(col));g.addColorStop(1,RGB(MIX(col,[40,20,10],0.5)));
+  X.fillStyle=g;X.beginPath();X.ellipse(ex,ey,ir,eh*0.9,0,0,7);X.fill();X.restore();
+  X.fillStyle=C.ink;X.beginPath();X.ellipse(ex,ey,ir*0.32,eh*0.36,0,0,7);X.fill();
+  X.fillStyle=C.white;X.beginPath();X.ellipse(ex-ir*0.42,ey-eh*0.42,ir*0.3,eh*0.26,0,0,7);X.fill();
+  if(h>0.82)star(ex+ir*0.45,ey-eh*0.5,ew*0.26,C.white,0.6+0.4*Math.sin(t*4));
+  if(lid>0.04){X.fillStyle=C.fur;X.fillRect(ex-ew,ey-eh,ew*2,lid*eh*2);}
+  if(h<0.5){X.strokeStyle="rgba(120,90,70,.7)";X.lineWidth=2.5;X.beginPath();X.arc(ex,ey+eh*0.2,ew*0.8,0.5,Math.PI-0.5);X.stroke();}
+}
+
+function drawDog(t){
+  const W=cv.width,H=cv.height; X.clearRect(0,0,W,H);
+  const h=health,droop=1-h;
+  const breath=reduce?0:Math.sin(t*1.9)*0.012;
+  const shake=(!reduce&&droop>0.55)?(Math.random()-.5)*(droop-0.5)*9:0;
+  const cx=W/2, head=H*0.37, s=W*0.185;
+
+  // ground shadow
+  let sg=X.createRadialGradient(cx,H*0.94,4,cx,H*0.94,s*1.7);
+  sg.addColorStop(0,"rgba(0,0,0,.45)");sg.addColorStop(1,"rgba(0,0,0,0)");
+  X.fillStyle=sg;X.beginPath();X.ellipse(cx,H*0.94,s*1.7,s*0.36,0,0,7);X.fill();
+
+  // ---- TAIL (wags when healthy) ----
+  const act=Math.max(0,Math.min(1,load*Math.max(0,Math.min(1,(h-0.05)/0.25))));
+  const wagSpeed=2+8*act, wagAmp=s*0.55*act;
+  const tipX=cx+s*1.45+(reduce?0:Math.sin(t*wagSpeed)*wagAmp);
+  const tipY=head+s*(2.5-0.95*h);
+  X.strokeStyle=C.fur;X.lineCap="round";X.lineWidth=s*0.3;
+  X.beginPath();X.moveTo(cx+s*0.8,head+s*2.45);
+  X.quadraticCurveTo(cx+s*1.5,head+s*2.0,tipX,tipY);X.stroke();
+
+  X.save();
+  X.translate(cx+shake,head+s*0.5);
+  if(!reduce)X.rotate(droop*-0.2+Math.sin(t*1.1)*0.012);
+  X.translate(-cx,-(head+s*0.5));
+
+  const bodyY=head+s*1.9;
+  // body
+  X.fillStyle=C.fur;X.strokeStyle=C.ink;X.lineWidth=4;
+  X.beginPath();X.ellipse(cx,bodyY,s*1.15*(1-breath*0.5),s*1.15*(1+breath),0,0,7);X.fill();X.stroke();
+  X.fillStyle=C.muzzle;X.beginPath();X.ellipse(cx,bodyY+s*0.45,s*0.55,s*0.78,0,0,7);X.fill();
+  for(const px of[-.55,.55]){X.fillStyle=C.fur;X.beginPath();X.ellipse(cx+px*s*0.7,bodyY+s*0.95,s*0.32,s*0.28,0,0,7);X.fill();
+    X.strokeStyle=C.ink;X.lineWidth=3;X.stroke();}
+
+  // ---- EARS (floppy, sway, longer when drooping) ----
+  const eL=s*(1.2+droop*0.5), eSway=reduce?0:Math.sin(t*1.6)*0.05;
+  for(const sgn of[-1,1]){
+    X.save();X.translate(cx+sgn*s*0.92,head-s*0.55);X.rotate(sgn*(0.12+eSway));
+    X.fillStyle=C.ear;X.strokeStyle=C.ink;X.lineWidth=3;
+    X.beginPath();X.ellipse(0,eL*0.45,s*0.32,eL*0.55,0,0,7);X.fill();X.stroke();X.restore();
+  }
+  // head
+  X.fillStyle=C.fur;X.strokeStyle=C.ink;X.lineWidth=4;
+  X.beginPath();X.ellipse(cx,head,s*1.04,s*0.95,0,0,7);X.fill();X.stroke();
+  // eye patch
+  X.fillStyle=C.ear;X.beginPath();X.ellipse(cx-s*0.4,head-s*0.08,s*0.36,s*0.42,0,0,7);X.fill();
+
+  // eyes
+  eye(cx-s*0.42,head-s*0.05,s*0.36,s*0.44,h,t);
+  eye(cx+s*0.42,head-s*0.05,s*0.36,s*0.44,h,t);
+
+  // ---- MUZZLE + NOSE + TONGUE ----
+  const my=head+s*0.42;
+  X.fillStyle=C.muzzle;X.strokeStyle=C.ink;X.lineWidth=3;
+  X.beginPath();X.ellipse(cx,my+s*0.28,s*0.5,s*0.42,0,0,7);X.fill();X.stroke();
+  // mouth corners
+  X.strokeStyle=C.ink;X.lineWidth=3;X.lineCap="round";
+  X.beginPath();X.arc(cx-s*0.16,my+s*0.18,s*0.18,0.2,Math.PI-0.2);X.arc(cx+s*0.16,my+s*0.18,s*0.18,0.2,Math.PI-0.2);X.stroke();
+  // tongue (pants when healthy, hangs long & still when low)
+  const pant=act>0.3&&!reduce?Math.abs(Math.sin(t*(3+act*4)))*s*0.12:0;
+  const tl=s*(0.22+(1-h)*0.75)+pant;
+  const tsway=reduce?0:Math.sin(t*5)*s*0.04*h;
+  X.fillStyle=C.tongue;X.strokeStyle=C.tongueDk;X.lineWidth=2.5;
+  X.beginPath();X.roundRect(cx-s*0.15+tsway,my+s*0.3,s*0.3,tl,s*0.14);X.fill();X.stroke();
+  X.beginPath();X.moveTo(cx+tsway,my+s*0.36);X.lineTo(cx+tsway,my+s*0.3+tl*0.8);X.stroke();
+  // nose on top of muzzle
+  X.fillStyle=C.nose;X.beginPath();X.ellipse(cx,my+s*0.02,s*0.2,s*0.15,0,0,7);X.fill();
+  X.fillStyle="rgba(255,255,255,.5)";X.beginPath();X.ellipse(cx-s*0.06,my-s*0.02,s*0.05,s*0.035,0,0,7);X.fill();
+
+  // collar
+  X.strokeStyle=C.collar;X.lineWidth=s*0.15;
+  X.beginPath();X.arc(cx,head+s*0.5,s*0.92,Math.PI*0.32,Math.PI*0.68);X.stroke();
+  for(let i=0;i<5;i++){const a=Math.PI*0.36+(i/4)*Math.PI*0.28;
+    const xp=cx+Math.cos(a)*s*0.92,yp=head+s*0.5+Math.sin(a)*s*0.92;
+    X.fillStyle=C.stud;X.beginPath();X.arc(xp,yp,s*0.05,0,7);X.fill();}
+
+  // emotes
+  if(h>0.85&&!reduce)star(cx+s*0.95,head-s*0.7,s*0.16,C.white,0.5+0.5*Math.sin(t*3));
+  if(h>0.3&&h<0.72){const ph=(t*0.7)%1,sx=cx+s*0.92,sy=head-s*0.6+ph*s*0.5;
+    X.fillStyle="#82cdff";X.globalAlpha=1-ph*0.3;
+    X.beginPath();X.moveTo(sx,sy-s*0.14);X.quadraticCurveTo(sx+s*0.12,sy+s*0.06,sx,sy+s*0.12);
+    X.quadraticCurveTo(sx-s*0.12,sy+s*0.06,sx,sy-s*0.14);X.fill();X.globalAlpha=1;}
+  if(h<0.5){const vx=cx-s*0.92,vy=head-s*0.62,p=1+0.15*Math.sin(t*6);
+    X.strokeStyle="#ff4a60";X.lineWidth=4;X.lineCap="round";
+    for(let a=0;a<3;a++){const an=a*2*Math.PI/3;X.beginPath();
+      X.moveTo(vx+Math.cos(an)*s*0.2*p,vy+Math.sin(an)*s*0.2*p);X.lineTo(vx+Math.cos(an)*s*0.05,vy+Math.sin(an)*s*0.05);
+      X.lineTo(vx+Math.cos(an+0.5)*s*0.15*p,vy+Math.sin(an+0.5)*s*0.15*p);X.stroke();}}
+  if(h<0.15&&!reduce){X.strokeStyle="rgba(225,225,130,.9)";X.lineWidth=2.5;
+    for(const sx of[cx-s*0.45,cx+s*0.45]){X.beginPath();
+      for(let i=0;i<24;i++){const a=t*3+i*0.4,rr=i*0.5;X[i?"lineTo":"moveTo"](sx+Math.cos(a)*rr,head-s*1.3+Math.sin(a)*rr*0.6);}X.stroke();}}
+
+  X.restore();
+}
+
+function frame(now){const t=(now-t0)/1000;
+  if(now-t0>nextBlink){blink=1;nextBlink=(now-t0)+1400+Math.random()*3000;}
+  blink=Math.max(0,blink-0.12);
+  health=L(health,target,reduce?1:0.1);
+  load=L(load,loadT,reduce?1:0.08);
+  drawDog(t);requestAnimationFrame(frame);}
+const dot=document.getElementById("dot"),quip=document.getElementById("quip"),pct=document.getElementById("pct"),hp=document.getElementById("hp"),ld=document.getElementById("ld"),ldv=document.getElementById("ldv");
+function refresh(){const h=target;
+  quip.textContent=h>0.6?"tail going. all good!":h>0.25?"...something wrong?":"x_x  (restart me)";
+  pct.textContent=Math.round(h*100)+"%";ldv.textContent=Math.round(loadT*100)+"%";
+  const col=h>0.55?"var(--neon)":h>0.25?"#ffb13b":"var(--alarm)";
+  dot.style.background=col;dot.style.boxShadow="0 0 10px "+col;}
+hp.addEventListener("input",()=>{target=hp.value/100;refresh();});
+ld.addEventListener("input",()=>{loadT=ld.value/100;refresh();});
+let manual=false;
+hp.addEventListener("pointerdown",()=>{manual=true;});
+hp.addEventListener("pointerup",()=>{manual=false;});
+window.setHealth=function(pct){ if(manual) return; pct=Math.max(0,Math.min(100,pct)); target=hp.value=pct/100; refresh(); };
+const dpr=Math.min(devicePixelRatio||1,2);
+cv.width=420*dpr;cv.height=470*dpr;cv.style.width="420px";cv.style.height="470px";
+refresh();requestAnimationFrame(frame);
+</script>
+</body>
+</html>

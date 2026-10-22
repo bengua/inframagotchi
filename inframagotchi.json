@@ -1,0 +1,50 @@
+{
+  "probe": [
+    {
+      "type": "disk",
+      "path": "/",
+      "warn": 0.8,
+      "critical": 0.95,
+      "interval": 30
+    },
+    {
+      "type": "ram",
+      "warn": 0.75,
+      "critical": 0.9,
+      "interval": 10
+    },
+    {
+      "type": "load",
+      "warn": 2.0,
+      "critical": 4.0,
+      "interval": 10
+    },
+    {
+      "type": "service",
+      "unit": "NetworkManager.service",
+      "interval": 10
+    },
+    {
+      "type": "ping",
+      "host": "1.1.1.1",
+      "count": 1,
+      "timeout": 5,
+      "interval": 60
+    },
+    {
+      "type": "ping",
+      "host": "gateway.local",
+      "count": 1,
+      "timeout": 5,
+      "interval": 60
+    },
+    {
+      "type": "http",
+      "url": "https://example.com",
+      "warn_ms": 500,
+      "critical_ms": 2000,
+      "timeout": 5,
+      "interval": 60
+    }
+  ]
+}
