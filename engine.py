@@ -110,7 +110,11 @@ class EngineHandler(BaseHTTPRequestHandler):
         return Path(value) if value else None
 
     def _serve_runs(self) -> None:
-        """List the recent job-runner records, newest first, at most 20."""
+        """List the recent job-runner records, newest first, at most 20.
+
+        Ordered by run_id descending: run ids embed their timestamp
+        (YYYYMMDD-HHMMSS-xxx), so a lexicographic sort is a time sort.
+        """
         records_dir = self._runs_dir()
         runs: list[dict[str, Any]] = []
         if records_dir is not None and records_dir.is_dir():
@@ -129,7 +133,7 @@ class EngineHandler(BaseHTTPRequestHandler):
                         "ended_at": record.get("ended_at"),
                     }
                 )
-        runs.sort(key=lambda r: r.get("started_at") or 0, reverse=True)
+        runs.sort(key=lambda r: str(r.get("run_id") or ""), reverse=True)
         self._json_response({"runs": runs[:20]})
 
     def _serve_run(self, run_id: str) -> None:
